@@ -54,9 +54,66 @@ function M.register_keymaps(claude_code, config)
 
   -- Visual mode keymaps for selection
   if config.keymaps.selection and config.keymaps.selection.ask then
+    --- Wait for Claude Code CLI to be ready by monitoring terminal buffer content
+    --- @param bufnr number Terminal buffer number
+    --- @param callback function Function to call when CLI is ready
+    --- @param is_new_session boolean Whether this is a new session
+    local function wait_for_cli_ready(bufnr, callback, is_new_session)
+      -- For existing sessions, CLI is already ready - execute immediately
+      if not is_new_session then
+        callback()
+        return
+      end
+
+      local max_attempts = 50 -- 50 * 50ms = 2.5 seconds max
+      local attempts = 0
+
+      local function check_ready()
+        attempts = attempts + 1
+
+        if not vim.api.nvim_buf_is_valid(bufnr) then
+          if attempts < max_attempts then
+            vim.defer_fn(check_ready, 50)
+          else
+            vim.notify('Claude Code: Terminal buffer became invalid', vim.log.levels.ERROR)
+          end
+          return
+        end
+
+        -- Get terminal buffer content (last few lines where prompt would appear)
+        local line_count = vim.api.nvim_buf_line_count(bufnr)
+        local start_line = math.max(0, line_count - 5)
+        local lines = vim.api.nvim_buf_get_lines(bufnr, start_line, line_count, false)
+        local content = table.concat(lines, '\n')
+
+        -- Claude Code CLI shows ">" prompt when ready for input
+        if content:match('>%s*$') then
+          callback()
+          return
+        end
+
+        if attempts < max_attempts then
+          vim.defer_fn(check_ready, 50)
+        else
+          -- Fallback: send anyway after timeout
+          callback()
+        end
+      end
+
+      -- Start checking immediately
+      check_ready()
+    end
+
     vim.keymap.set('x', config.keymaps.selection.ask, function()
         -- Capture file info BEFORE vim.ui.input (which exits visual mode)
         local filepath = vim.fn.expand('%:p')
+
+        -- Check for unsaved buffer
+        if filepath == '' then
+          vim.notify('Claude Code: Cannot send selection from unsaved buffer', vim.log.levels.WARN)
+          return
+        end
+
         -- Use visual mode marks (current selection)
         local start_line = vim.fn.line('v')
         local end_line = vim.fn.line('.')
@@ -76,20 +133,31 @@ function M.register_keymaps(claude_code, config)
               input
             )
             local claude = require('claude-code')
+
             -- Check if Claude Code is already running
             local is_new_session = not claude.claude_code.current_instance
               or not claude.claude_code.instances[claude.claude_code.current_instance]
 
             claude.open()
 
-            -- Delay longer if starting new session (Claude Code needs time to initialize)
-            local delay = is_new_session and 2000 or 200
-            vim.defer_fn(function()
-              claude.send(message)
-              vim.defer_fn(function()
-                claude.send('\r')
-              end, 50)
-            end, delay)
+            -- Get buffer number after open
+            local instance_id = claude.claude_code.current_instance
+            local bufnr = instance_id and claude.claude_code.instances[instance_id]
+
+            if not bufnr then
+              vim.notify('Claude Code: Failed to get terminal buffer', vim.log.levels.ERROR)
+              return
+            end
+
+            -- Wait for CLI to be ready, then send message
+            wait_for_cli_ready(bufnr, function()
+              local sent = claude.send(message)
+              if sent then
+                vim.defer_fn(function()
+                  claude.send('\r')
+                end, 50)
+              end
+            end, is_new_session)
           end
         end)
       end, { noremap = true, silent = true, desc = 'Claude Code: Ask about selection' })
