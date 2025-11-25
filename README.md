@@ -30,12 +30,13 @@ This plugin was built entirely with Claude Code in a Neovim terminal, and then i
 - 🔄 Automatically detect and reload files modified by Claude Code
 - ⚡ Real-time buffer updates when files are changed externally
 - 📱 Customizable window position and size (including floating windows)
+- 🎯 **Visual selection support** - Send selected code to Claude with context
 - 🤖 Integration with which-key (if available)
 - 📂 Automatically uses git project root as working directory (when available)
 - 🧩 Modular and maintainable code structure
 - 📋 Type annotations with LuaCATS for better IDE support
 - ✅ Configuration validation to prevent errors
-- 🧪 Testing framework for reliability (44 comprehensive tests)
+- 🧪 Testing framework for reliability (60 comprehensive tests)
 
 ## Requirements
 
@@ -146,6 +147,10 @@ require("claude-code").setup({
         verbose = "<leader>cV",  -- Normal mode keymap for Claude Code with verbose flag
       },
     },
+    -- Visual mode selection keymaps
+    selection = {
+      ask = "<leader>cs",     -- Ask about selection with prompt input
+    },
     window_navigation = true, -- Enable window navigation keymaps (<C-h/j/k/l>)
     scrolling = true,         -- Enable scrolling keymaps (<C-f/b>) for page up/down
   }
@@ -198,6 +203,10 @@ Variant mode mappings (if configured):
 - `<leader>cC` - Toggle Claude Code with --continue flag
 - `<leader>cV` - Toggle Claude Code with --verbose flag
 
+Visual selection mapping (select code in visual mode, then use):
+
+- `<leader>cs` - Ask Claude about the selection (prompts for input)
+
 Additionally, when in the Claude Code terminal:
 
 - `<C-h>` - Move to the window on the left
@@ -210,6 +219,23 @@ Additionally, when in the Claude Code terminal:
 Note: After scrolling with `<C-f>` or `<C-b>`, you'll need to press the `i` key to re-enter insert mode so you can continue typing to Claude Code.
 
 When Claude Code modifies files that are open in Neovim, they'll be automatically reloaded.
+
+### Lua API
+
+The plugin exposes a Lua API for programmatic control:
+
+```lua
+local claude = require("claude-code")
+
+-- Basic controls
+claude.toggle()              -- Toggle terminal visibility
+claude.open()                -- Open/show terminal
+claude.close()               -- Hide terminal (keeps session)
+
+-- Send text to Claude
+claude.send("Hello Claude!") -- Send raw text
+claude.send("Fix this bug\r") -- With carriage return to submit
+```
 
 ### Floating Window Example
 

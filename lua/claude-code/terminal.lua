@@ -380,6 +380,70 @@ local function create_new_instance(claude_code, config, git, instance_id)
   end
 end
 
+--- Get terminal job ID for current instance
+--- @param claude_code table The main plugin module
+--- @return number|nil job_id Terminal job ID or nil if not found
+function M.get_job_id(claude_code)
+  local instance_id = claude_code.claude_code.current_instance
+  if not instance_id then
+    return nil
+  end
+
+  local bufnr = claude_code.claude_code.instances[instance_id]
+  if not bufnr or not vim.api.nvim_buf_is_valid(bufnr) then
+    return nil
+  end
+
+  return vim.b[bufnr].terminal_job_id
+end
+
+--- Send text to the Claude Code terminal
+--- @param claude_code table The main plugin module
+--- @param text string Text to send to the terminal
+--- @return boolean success True if text was sent successfully
+function M.send_text(claude_code, text)
+  local job_id = M.get_job_id(claude_code)
+  if not job_id then
+    vim.notify('Claude Code terminal is not running', vim.log.levels.WARN)
+    return false
+  end
+
+  -- Send text to terminal
+  vim.api.nvim_chan_send(job_id, text)
+  return true
+end
+
+--- Ensure Claude Code window is visible
+--- @param claude_code table The main plugin module
+--- @param config table Plugin configuration
+--- @return boolean success True if window is now visible
+function M.ensure_visible(claude_code, config)
+  local instance_id = claude_code.claude_code.current_instance
+  if not instance_id then
+    return false
+  end
+
+  local bufnr = claude_code.claude_code.instances[instance_id]
+  if not bufnr or not vim.api.nvim_buf_is_valid(bufnr) then
+    return false
+  end
+
+  -- Check if already visible
+  local win_ids = vim.fn.win_findbuf(bufnr)
+  if #win_ids > 0 then
+    return true
+  end
+
+  -- Open the window
+  if config.window.position == 'float' then
+    create_float(config, bufnr)
+  else
+    create_split(config.window.position, config, bufnr)
+  end
+
+  return true
+end
+
 --- Toggle the Claude Code terminal window
 --- @param claude_code table The main plugin module
 --- @param config table The plugin configuration

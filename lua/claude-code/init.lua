@@ -103,6 +103,53 @@ end
 --- Version information
 M.version = version
 
+--- Send raw text to the Claude Code terminal
+--- @param text string Text to send to the terminal
+--- @return boolean success True if text was sent successfully
+function M.send(text)
+  -- Ensure Claude Code is running
+  if not M.claude_code.current_instance then
+    -- Start Claude Code first
+    M.toggle()
+    -- Wait a bit for terminal to initialize
+    vim.defer_fn(function()
+      terminal.send_text(M, text)
+    end, 100)
+    return true
+  end
+
+  return terminal.send_text(M, text)
+end
+
+--- Open Claude Code and focus the terminal window
+--- @return boolean success True if window is now visible
+function M.open()
+  if not M.claude_code.current_instance then
+    M.toggle()
+    return true
+  end
+
+  return terminal.ensure_visible(M, M.config)
+end
+
+--- Close the Claude Code terminal window (hide, not terminate)
+function M.close()
+  local instance_id = M.claude_code.current_instance
+  if not instance_id then
+    return
+  end
+
+  local bufnr = M.claude_code.instances[instance_id]
+  if not bufnr or not vim.api.nvim_buf_is_valid(bufnr) then
+    return
+  end
+
+  local win_ids = vim.fn.win_findbuf(bufnr)
+  for _, win_id in ipairs(win_ids) do
+    vim.api.nvim_win_close(win_id, true)
+  end
+end
+
 --- Setup function for the plugin
 --- @param user_config? table User configuration table (optional)
 function M.setup(user_config)

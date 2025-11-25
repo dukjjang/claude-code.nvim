@@ -39,9 +39,14 @@ local M = {}
 -- @field normal string|boolean Normal mode keymap for toggling Claude Code, false to disable
 -- @field terminal string|boolean Terminal mode keymap for toggling Claude Code, false to disable
 
+--- ClaudeCodeKeymapsSelection class for visual selection keymap configuration
+-- @table ClaudeCodeKeymapsSelection
+-- @field ask string|boolean Visual mode keymap to ask about selection with prompt input
+
 --- ClaudeCodeKeymaps class for keymap configuration
 -- @table ClaudeCodeKeymaps
 -- @field toggle ClaudeCodeKeymapsToggle Keymaps for toggling Claude Code
+-- @field selection ClaudeCodeKeymapsSelection Keymaps for visual selection
 -- @field window_navigation boolean Enable window navigation keymaps
 -- @field scrolling boolean Enable scrolling keymaps
 
@@ -130,6 +135,10 @@ M.default_config = {
         continue = '<leader>cC', -- Normal mode keymap for Claude Code with continue flag
         verbose = '<leader>cV', -- Normal mode keymap for Claude Code with verbose flag
       },
+    },
+    -- Visual mode selection keymaps
+    selection = {
+      ask = '<leader>cs', -- Visual mode keymap to ask about selection with prompt input
     },
     window_navigation = true, -- Enable window navigation keymaps (<C-h/j/k/l>)
     scrolling = true, -- Enable scrolling keymaps (<C-f/b>) for page up/down
@@ -357,6 +366,19 @@ local function validate_keymaps_config(keymaps)
 
   if type(keymaps.scrolling) ~= 'boolean' then
     return false, 'keymaps.scrolling must be a boolean'
+  end
+
+  -- Validate selection keymaps if they exist
+  if keymaps.selection then
+    if type(keymaps.selection) ~= 'table' then
+      return false, 'keymaps.selection must be a table'
+    end
+
+    if keymaps.selection.ask ~= nil then
+      if not (keymaps.selection.ask == false or type(keymaps.selection.ask) == 'string') then
+        return false, 'keymaps.selection.ask must be a string or false'
+      end
+    end
   end
 
   return true, nil

@@ -52,6 +52,49 @@ function M.register_keymaps(claude_code, config)
     end
   end
 
+  -- Visual mode keymaps for selection
+  if config.keymaps.selection and config.keymaps.selection.ask then
+    vim.keymap.set('x', config.keymaps.selection.ask, function()
+        -- Capture file info BEFORE vim.ui.input (which exits visual mode)
+        local filepath = vim.fn.expand('%:p')
+        -- Use visual mode marks (current selection)
+        local start_line = vim.fn.line('v')
+        local end_line = vim.fn.line('.')
+        -- Ensure start <= end
+        if start_line > end_line then
+          start_line, end_line = end_line, start_line
+        end
+
+        vim.ui.input({ prompt = 'Ask Claude: ' }, function(input)
+          if input and input ~= '' then
+            -- Just send file path and line range - Claude Code can read the file
+            local message = string.format(
+              'See %s:%d-%d\n\n%s',
+              filepath,
+              start_line,
+              end_line,
+              input
+            )
+            local claude = require('claude-code')
+            -- Check if Claude Code is already running
+            local is_new_session = not claude.claude_code.current_instance
+              or not claude.claude_code.instances[claude.claude_code.current_instance]
+
+            claude.open()
+
+            -- Delay longer if starting new session (Claude Code needs time to initialize)
+            local delay = is_new_session and 2000 or 200
+            vim.defer_fn(function()
+              claude.send(message)
+              vim.defer_fn(function()
+                claude.send('\r')
+              end, 50)
+            end, delay)
+          end
+        end)
+      end, { noremap = true, silent = true, desc = 'Claude Code: Ask about selection' })
+  end
+
   -- Register with which-key if it's available
   vim.defer_fn(function()
     local status_ok, which_key = pcall(require, 'which-key')
@@ -80,6 +123,14 @@ function M.register_keymaps(claude_code, config)
             }
           end
         end
+      end
+
+      -- Register selection keymaps with which-key
+      if config.keymaps.selection and config.keymaps.selection.ask then
+        which_key.add {
+          mode = 'x',
+          { config.keymaps.selection.ask, desc = 'Claude Code: Ask about selection', icon = '🤖' },
+        }
       end
     end
   end, 100)
