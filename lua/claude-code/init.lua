@@ -24,11 +24,13 @@ local file_refresh = require('claude-code.file_refresh')
 local terminal = require('claude-code.terminal')
 local git = require('claude-code.git')
 local version = require('claude-code.version')
+local tmux = require('claude-code.tmux')
 
 local M = {}
 
 -- Make imported modules available
 M.commands = commands
+M.tmux = tmux
 
 -- Store the current configuration
 --- @type table
@@ -103,10 +105,22 @@ end
 --- Version information
 M.version = version
 
---- Send raw text to the Claude Code terminal
+--- Send raw text to the Claude Code terminal or tmux pane
 --- @param text string Text to send to the terminal
 --- @return boolean success True if text was sent successfully
 function M.send(text)
+  -- Check tmux first if enabled
+  if M.config.tmux and M.config.tmux.enable then
+    local tmux_pane = tmux.find_claude_pane()
+    if tmux_pane then
+      -- If prefer_tmux is true, or nvim terminal is not running, use tmux
+      if M.config.tmux.prefer_tmux or not M.claude_code.current_instance then
+        return tmux.send_text(tmux_pane, text)
+      end
+    end
+  end
+
+  -- Fall back to nvim terminal
   -- Ensure Claude Code is running
   if not M.claude_code.current_instance then
     -- Start Claude Code first
@@ -119,6 +133,49 @@ function M.send(text)
   end
 
   return terminal.send_text(M, text)
+end
+
+--- Send raw text followed by Enter to the Claude Code terminal or tmux pane
+--- @param text string Text to send
+--- @return boolean success True if text was sent successfully
+function M.send_with_enter(text)
+  -- Check tmux first if enabled
+  if M.config.tmux and M.config.tmux.enable then
+    local tmux_pane = tmux.find_claude_pane()
+    if tmux_pane then
+      if M.config.tmux.prefer_tmux or not M.claude_code.current_instance then
+        return tmux.send_text_with_enter(tmux_pane, text)
+      end
+    end
+  end
+
+  -- Fall back to nvim terminal
+  if not M.send(text) then
+    return false
+  end
+  return M.send('\r')
+end
+
+--- Check if Claude Code is available (either in tmux or nvim terminal)
+--- @return boolean available True if Claude Code is available
+--- @return string source "tmux" or "nvim" indicating where Claude Code is running
+function M.is_available()
+  -- Check tmux first if enabled
+  if M.config.tmux and M.config.tmux.enable then
+    if tmux.find_claude_pane() then
+      return true, 'tmux'
+    end
+  end
+
+  -- Check nvim terminal
+  if M.claude_code.current_instance then
+    local bufnr = M.claude_code.instances[M.claude_code.current_instance]
+    if bufnr and vim.api.nvim_buf_is_valid(bufnr) then
+      return true, 'nvim'
+    end
+  end
+
+  return false, nil
 end
 
 --- Open Claude Code and focus the terminal window

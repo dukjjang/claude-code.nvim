@@ -65,12 +65,18 @@ local M = {}
 -- @field pushd_cmd string Command to push directory onto stack (e.g., 'pushd' for bash/zsh)
 -- @field popd_cmd string Command to pop directory from stack (e.g., 'popd' for bash/zsh)
 
+--- ClaudeCodeTmux class for tmux integration configuration
+-- @table ClaudeCodeTmux
+-- @field enable boolean Enable tmux integration (check for Claude Code in tmux panes first)
+-- @field prefer_tmux boolean When true, prefer tmux pane over nvim terminal if both exist
+
 --- ClaudeCodeConfig class for main configuration
 -- @table ClaudeCodeConfig
 -- @field window ClaudeCodeWindow Terminal window settings
 -- @field refresh ClaudeCodeRefresh File refresh settings
 -- @field git ClaudeCodeGit Git integration settings
 -- @field shell ClaudeCodeShell Shell-specific configuration
+-- @field tmux ClaudeCodeTmux Tmux integration settings
 -- @field command string Command used to launch Claude Code
 -- @field command_variants ClaudeCodeCommandVariants Command variants configuration
 -- @field keymaps ClaudeCodeKeymaps Keymaps configuration
@@ -114,6 +120,11 @@ M.default_config = {
     separator = '&&', -- Command separator used in shell commands
     pushd_cmd = 'pushd', -- Command to push directory onto stack
     popd_cmd = 'popd', -- Command to pop directory from stack
+  },
+  -- Tmux integration settings
+  tmux = {
+    enable = true, -- Enable tmux integration (check for Claude Code in tmux panes first)
+    prefer_tmux = true, -- When true, prefer tmux pane over nvim terminal if both exist
   },
   -- Command settings
   command = 'claude', -- Command used to launch Claude Code
@@ -325,6 +336,26 @@ local function validate_shell_config(shell)
   return true, nil
 end
 
+--- Validate tmux configuration
+--- @param tmux table Tmux configuration
+--- @return boolean valid
+--- @return string? error_message
+local function validate_tmux_config(tmux)
+  if type(tmux) ~= 'table' then
+    return false, 'tmux config must be a table'
+  end
+
+  if type(tmux.enable) ~= 'boolean' then
+    return false, 'tmux.enable must be a boolean'
+  end
+
+  if type(tmux.prefer_tmux) ~= 'boolean' then
+    return false, 'tmux.prefer_tmux must be a boolean'
+  end
+
+  return true, nil
+end
+
 --- Validate keymaps configuration
 --- @param keymaps table Keymaps configuration
 --- @return boolean valid
@@ -436,6 +467,12 @@ local function validate_config(config)
 
   -- Validate shell settings
   valid, err = validate_shell_config(config.shell)
+  if not valid then
+    return false, err
+  end
+
+  -- Validate tmux settings
+  valid, err = validate_tmux_config(config.tmux)
   if not valid then
     return false, err
   end

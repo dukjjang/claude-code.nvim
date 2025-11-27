@@ -133,31 +133,55 @@ function M.register_keymaps(claude_code, config)
               input
             )
             local claude = require('claude-code')
+            local tmux_mod = require('claude-code.tmux')
 
-            -- Check if Claude Code is already running
-            local is_new_session = not claude.claude_code.current_instance
-              or not claude.claude_code.instances[claude.claude_code.current_instance]
-
-            claude.open()
-
-            -- Get buffer number after open
-            local instance_id = claude.claude_code.current_instance
-            local bufnr = instance_id and claude.claude_code.instances[instance_id]
-
-            if not bufnr then
-              vim.notify('Claude Code: Failed to get terminal buffer', vim.log.levels.ERROR)
-              return
+            -- Check if we should use tmux
+            local use_tmux = false
+            local tmux_pane = nil
+            if claude.config.tmux and claude.config.tmux.enable then
+              tmux_pane = tmux_mod.find_claude_pane()
+              if tmux_pane then
+                if claude.config.tmux.prefer_tmux or not claude.claude_code.current_instance then
+                  use_tmux = true
+                end
+              end
             end
 
-            -- Wait for CLI to be ready, then send message
-            wait_for_cli_ready(bufnr, function()
-              local sent = claude.send(message)
+            if use_tmux and tmux_pane then
+              -- Send directly to tmux pane
+              local sent = tmux_mod.send_text(tmux_pane, message)
               if sent then
                 vim.defer_fn(function()
-                  claude.send('\r')
+                  tmux_mod.send_text(tmux_pane, '\r')
                 end, 50)
               end
-            end, is_new_session)
+            else
+              -- Use nvim terminal flow
+              -- Check if Claude Code is already running
+              local is_new_session = not claude.claude_code.current_instance
+                or not claude.claude_code.instances[claude.claude_code.current_instance]
+
+              claude.open()
+
+              -- Get buffer number after open
+              local instance_id = claude.claude_code.current_instance
+              local bufnr = instance_id and claude.claude_code.instances[instance_id]
+
+              if not bufnr then
+                vim.notify('Claude Code: Failed to get terminal buffer', vim.log.levels.ERROR)
+                return
+              end
+
+              -- Wait for CLI to be ready, then send message
+              wait_for_cli_ready(bufnr, function()
+                local sent = claude.send(message)
+                if sent then
+                  vim.defer_fn(function()
+                    claude.send('\r')
+                  end, 50)
+                end
+              end, is_new_session)
+            end
           end
         end)
       end, { noremap = true, silent = true, desc = 'Claude Code: Ask about selection' })
